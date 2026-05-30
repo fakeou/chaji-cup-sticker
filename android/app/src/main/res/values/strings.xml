@@ -1,0 +1,3 @@
+<resources>
+    <string name="accessibility_service_description">简笔画复刻需要此权限来模拟触摸绘制操作。开启后，应用可以自动在屏幕上绘制简笔画。</string>
+</resources>
