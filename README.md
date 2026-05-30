@@ -48,17 +48,6 @@
 
 ![作品上传并审核通过](docs/images/step4.png)
 
-## 图片放置位置
-
-如果你想让 README 里的图片正常显示，请把截图放到下面这些路径：
-
-```text
-docs/images/step1.jpg
-docs/images/step2.jpg
-docs/images/step3.jpg
-docs/images/step4.png
-```
-
 ## 注意事项
 
 - 图片越简单，识别和绘制效果越稳定。
