@@ -20,7 +20,7 @@
 
 示例：
 
-![AI 处理后的简笔画示例](docs/images/step-1-ai-line-art.png)
+![AI 处理后的简笔画示例](docs/images/step1.jpg)
 
 ### 2. 将简笔画上传到 App
 
@@ -28,7 +28,7 @@
 
 确认预览正常后，点击激活悬浮按钮。
 
-![App 上传并识别简笔画](docs/images/step-2-app-preview.png)
+![App 上传并识别简笔画](docs/images/step2.jpg)
 
 ### 3. 在霸王茶姬小程序画布中开始绘制
 
@@ -38,7 +38,7 @@
 
 绘制过程中不要触摸屏幕，也不要切换页面。
 
-![小程序画布绘制中](docs/images/step-3-drawing.png)
+![小程序画布绘制中](docs/images/step3.jpg)
 
 ### 4. 等待绘画完成并上传审核
 
@@ -46,17 +46,17 @@
 
 实测简单图案通常几分钟就能审核通过。
 
-![作品上传并审核通过](docs/images/step-4-approved.png)
+![作品上传并审核通过](docs/images/step4.png)
 
 ## 图片放置位置
 
 如果你想让 README 里的图片正常显示，请把截图放到下面这些路径：
 
 ```text
-docs/images/step-1-ai-line-art.png
-docs/images/step-2-app-preview.png
-docs/images/step-3-drawing.png
-docs/images/step-4-approved.png
+docs/images/step1.jpg
+docs/images/step2.jpg
+docs/images/step3.jpg
+docs/images/step4.png
 ```
 
 ## 注意事项
