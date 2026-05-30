@@ -1,17 +1,76 @@
-# sketch_reproducer
+# chaji-cup-sticker
 
-A new Flutter project.
+一个用于辅助制作霸王茶姬杯贴简笔画的小工具。
 
-## Getting Started
+它可以把上传的黑白简笔画识别成笔画路径，然后通过 Android 无障碍服务和悬浮窗，在小程序画布上自动模拟触摸绘制。
 
-This project is a starting point for a Flutter application.
+> 适合个人娱乐和创意杯贴制作。绘制效果取决于原图复杂度、小程序画布响应速度和手机性能。
 
-A few resources to get you started if this is your first Flutter project:
+## 使用流程
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### 1. 用 AI 把复杂图片处理成简笔画
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+先把复杂图片交给 AI，生成尽量简单的黑白线稿。
+
+可以参考这个提示词：
+
+```text
+把这个图片改成简笔画，要求只能有黑白两种颜色，并且不能修改笔画粗细，要求尽量简单，适合儿童画模仿绘画
+```
+
+示例：
+
+![AI 处理后的简笔画示例](docs/images/step-1-ai-line-art.png)
+
+### 2. 将简笔画上传到 App
+
+打开 App，点击上传简笔画图片。识别完成后，页面会显示笔画预览和笔画数量。
+
+确认预览正常后，点击激活悬浮按钮。
+
+![App 上传并识别简笔画](docs/images/step-2-app-preview.png)
+
+### 3. 在霸王茶姬小程序画布中开始绘制
+
+打开霸王茶姬小程序的杯贴画布。
+
+点击 App 的蓝色悬浮按钮，调整覆盖框，让它和小程序画布区域对齐。调整完成后点击开始绘制。
+
+绘制过程中不要触摸屏幕，也不要切换页面。
+
+![小程序画布绘制中](docs/images/step-3-drawing.png)
+
+### 4. 等待绘画完成并上传审核
+
+耐心等待自动绘制完成，然后在小程序里提交作品，等待官方审核。
+
+实测简单图案通常几分钟就能审核通过。
+
+![作品上传并审核通过](docs/images/step-4-approved.png)
+
+## 图片放置位置
+
+如果你想让 README 里的图片正常显示，请把截图放到下面这些路径：
+
+```text
+docs/images/step-1-ai-line-art.png
+docs/images/step-2-app-preview.png
+docs/images/step-3-drawing.png
+docs/images/step-4-approved.png
+```
+
+## 注意事项
+
+- 图片越简单，识别和绘制效果越稳定。
+- 尽量使用黑白两色、线条清晰、背景干净的图片。
+- 不建议使用细节特别密集的图片，否则小程序画布可能漏掉部分笔画。
+- 绘制时请保持小程序画布在前台，不要触摸屏幕。
+- 如果绘制缺线，可以重新生成更简单的线稿再试。
+
+## 免责声明
+
+本项目仅用于个人学习、娱乐和合法创作辅助。
+
+请不要使用本工具生成、上传或传播违法违规内容，包括但不限于政治敏感内容、仇恨歧视内容、色情低俗内容、暴力恐怖内容、侵权商标或未经授权的人物形象。
+
+使用本工具生成和上传的作品，需要遵守霸王茶姬小程序规则、平台审核规范以及当地法律法规。因使用者上传内容造成的审核失败、账号限制、侵权纠纷或其他后果，由使用者自行承担。
