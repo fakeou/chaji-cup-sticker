@@ -22,7 +22,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var methodChannel: MethodChannel
 
     // 暂存笔画数据
-    private var sketchStrokes: List<List<FloatArray>>? = null
+    private var sketchStrokes: List<DrawingStroke>? = null
     private var sketchCanvasWidth: Int = 0
     private var sketchCanvasHeight: Int = 0
 
@@ -137,10 +137,11 @@ class MainActivity : FlutterActivity() {
             val cw = data["canvasWidth"] as? Int ?: return
             val ch = data["canvasHeight"] as? Int ?: return
 
-            val strokes = mutableListOf<List<FloatArray>>()
+            val strokes = mutableListOf<DrawingStroke>()
             for (strokeRaw in strokesRaw) {
                 val pointsRaw = strokeRaw as? Map<*, *> ?: continue
                 val pointsList = pointsRaw["points"] as? List<*> ?: continue
+                val mergeable = pointsRaw["mergeable"] as? Boolean ?: true
                 val points = mutableListOf<FloatArray>()
                 for (pointRaw in pointsList) {
                     val point = pointRaw as? Map<*, *> ?: continue
@@ -148,7 +149,7 @@ class MainActivity : FlutterActivity() {
                     val y = (point["y"] as? Number)?.toFloat() ?: continue
                     points.add(floatArrayOf(x, y))
                 }
-                if (points.size >= 2) strokes.add(points)
+                if (points.size >= 2) strokes.add(DrawingStroke(points, mergeable))
             }
 
             sketchStrokes = strokes

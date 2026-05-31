@@ -19,6 +19,21 @@ Future<Uint8List> _filledCirclePng() async {
   return bytes!.buffer.asUint8List();
 }
 
+Future<Uint8List> _twoCloseFilledCirclesPng() async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  final paint = ui.Paint()..color = const ui.Color(0xffffffff);
+  canvas.drawRect(const ui.Rect.fromLTWH(0, 0, 100, 70), paint);
+
+  paint.color = const ui.Color(0xff000000);
+  canvas.drawCircle(const ui.Offset(35, 35), 12, paint);
+  canvas.drawCircle(const ui.Offset(65, 35), 12, paint);
+
+  final image = await recorder.endRecording().toImage(100, 70);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  return bytes!.buffer.asUint8List();
+}
+
 ui.Rect _bounds(List<Stroke> strokes) {
   var left = double.infinity;
   var top = double.infinity;
@@ -53,4 +68,19 @@ void main() {
       expect(bounds.height, greaterThan(30));
     },
   );
+
+  test('filled region strokes are not mergeable', () async {
+    final sketch = await ImageProcessor.processImage(
+      await _twoCloseFilledCirclesPng(),
+      targetSize: 100,
+    );
+
+    final filledStrokes = sketch.strokes.where((stroke) => !stroke.mergeable);
+
+    expect(filledStrokes, isNotEmpty);
+    expect(
+      filledStrokes.every((stroke) => _bounds([stroke]).width < 25),
+      isTrue,
+    );
+  });
 }

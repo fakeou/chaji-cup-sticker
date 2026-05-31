@@ -4,7 +4,9 @@ import '../models/stroke.dart';
 /// Flutter ↔ Android 平台通道通信
 class DrawingService {
   static const _channel = MethodChannel('com.sketchreproducer/drawing');
-  static const _eventChannel = EventChannel('com.sketchreproducer/drawing_events');
+  static const _eventChannel = EventChannel(
+    'com.sketchreproducer/drawing_events',
+  );
 
   /// 检查无障碍服务是否已开启
   static Future<bool> isAccessibilityEnabled() async {
@@ -70,5 +72,6 @@ class DrawingService {
   }
 
   /// 监听来自原生层的事件
-  static Stream<dynamic> get eventStream => _eventChannel.receiveBroadcastStream();
+  static Stream<dynamic> get eventStream =>
+      _eventChannel.receiveBroadcastStream();
 }

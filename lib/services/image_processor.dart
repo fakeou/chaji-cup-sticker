@@ -9,7 +9,7 @@ class ImageProcessor {
     Uint8List imageBytes, {
     int targetSize = 800,
     int threshold = 128,
-    double brushWidth = 2.0,
+    double brushWidth = 1.0,
   }) async {
     final codec = await ui.instantiateImageCodec(imageBytes);
     final frame = await codec.getNextFrame();
@@ -274,7 +274,7 @@ class ImageProcessor {
             Stroke([
               StrokePoint(start.toDouble(), y.toDouble()),
               StrokePoint(end.toDouble(), y.toDouble()),
-            ]),
+            ], mergeable: false),
           );
         }
       }

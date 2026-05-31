@@ -3,9 +3,12 @@ package com.sketchreproducer.sketch_reproducer
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.DisplayMetrics
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 
 class DrawingAccessibilityService : AccessibilityService() {
@@ -25,17 +28,26 @@ class DrawingAccessibilityService : AccessibilityService() {
         private const val MAX_SEGMENT_POINTS = 70
         private const val SEGMENT_OVERLAP_POINTS = 1
         private const val MAX_RETRY_COUNT = 2
+        private const val CHAJI_SLIDER_MIN_X_RATIO = 191f / 1440f
+        private const val CHAJI_SLIDER_Y_RATIO = 2828f / 3200f
+        private const val BRUSH_TAP_DURATION_MS = 80L
+        private const val BRUSH_SET_DELAY_MS = 350L
 
         var instance: DrawingAccessibilityService? = null
             private set
 
-        private var pendingStrokes: List<List<FloatArray>>? = null
+        private var pendingStrokes: List<DrawingStroke>? = null
         private var pendingFrame: FloatArray? = null
         private var canvasWidth: Int = 0
         private var canvasHeight: Int = 0
         private var isDrawing = false
 
-        fun setDrawData(strokes: List<List<FloatArray>>, frame: FloatArray, cw: Int, ch: Int) {
+        fun setDrawData(
+            strokes: List<DrawingStroke>,
+            frame: FloatArray,
+            cw: Int,
+            ch: Int,
+        ) {
             pendingStrokes = strokes
             pendingFrame = frame
             canvasWidth = cw
@@ -79,21 +91,31 @@ class DrawingAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
     override fun onDestroy() { instance = null; super.onDestroy() }
 
-    private fun executeDrawing(strokes: List<List<FloatArray>>, frame: FloatArray, cw: Int, ch: Int) {
+    private fun executeDrawing(
+        strokes: List<DrawingStroke>,
+        frame: FloatArray,
+        cw: Int,
+        ch: Int,
+    ) {
         val fl = frame[0]; val ft = frame[1]; val fr = frame[2]; val fb = frame[3]
         val fw = fr - fl; val fh = fb - ft
 
         Log.d(TAG, "=== 开始绘制 ===")
         Log.d(TAG, "区域: ($fl,$ft)-($fr,$fb), 画布: ${cw}x${ch}")
-        Log.d(TAG, "原始笔画: ${strokes.size}")
+        Log.d(TAG, "原始笔画: ${strokes.size}, 使用最小画笔")
 
         // 1. 映射到屏幕坐标
-        val screenStrokes = mutableListOf<List<FloatArray>>()
+        val screenStrokes = mutableListOf<DrawingStroke>()
         for (stroke in strokes) {
-            if (stroke.size < 2) continue
-            screenStrokes.add(stroke.map { p ->
-                floatArrayOf(fl + (p[0] / cw) * fw, ft + (p[1] / ch) * fh)
-            })
+            if (stroke.points.size < 2) continue
+            screenStrokes.add(
+                DrawingStroke(
+                    stroke.points.map { p ->
+                        floatArrayOf(fl + (p[0] / cw) * fw, ft + (p[1] / ch) * fh)
+                    },
+                    stroke.mergeable
+                )
+            )
         }
 
         // 2. 合并端点接近的笔画（减少抬手次数）
@@ -106,24 +128,32 @@ class DrawingAccessibilityService : AccessibilityService() {
             "每 ${BATCH_STROKE_SIZE} 条笔画暂停 ${BATCH_PAUSE_MS}ms")
 
         // 3. 逐条绘制
-        handler.postDelayed({ drawNext(segments, 0) }, PRE_DRAW_DELAY_MS)
+        handler.postDelayed(
+            { setChajiBrushToMinimum { drawNext(segments, 0) } },
+            PRE_DRAW_DELAY_MS
+        )
     }
 
     /**
      * 合并端点接近的笔画：
      * 如果一条笔画的终点和另一条笔画的起点距离 < maxGap，就连起来
      */
-    private fun mergeNearbyStrokes(strokes: List<List<FloatArray>>, maxGap: Float): List<List<FloatArray>> {
+    private fun mergeNearbyStrokes(strokes: List<DrawingStroke>, maxGap: Float): List<DrawingStroke> {
         if (strokes.size <= 1) return strokes
 
         val used = BooleanArray(strokes.size)
-        val result = mutableListOf<List<FloatArray>>()
+        val result = mutableListOf<DrawingStroke>()
 
         for (i in strokes.indices) {
             if (used[i]) continue
             used[i] = true
+            val stroke = strokes[i]
+            if (!stroke.mergeable) {
+                result.add(stroke)
+                continue
+            }
             val chain = mutableListOf<FloatArray>()
-            chain.addAll(strokes[i])
+            chain.addAll(stroke.points)
 
             // 尝试往后接
             var searching = true
@@ -134,10 +164,10 @@ class DrawingAccessibilityService : AccessibilityService() {
                 var bestDist = maxGap
 
                 for (j in strokes.indices) {
-                    if (used[j]) continue
                     val other = strokes[j]
-                    val startPt = other.first()
-                    val endPtOther = other.last()
+                    if (used[j] || !other.mergeable) continue
+                    val startPt = other.points.first()
+                    val endPtOther = other.points.last()
 
                     // 正向距离
                     val d1 = dist(endPt, startPt)
@@ -154,17 +184,17 @@ class DrawingAccessibilityService : AccessibilityService() {
 
                 if (bestIdx >= 0) {
                     used[bestIdx] = true
-                    chain.addAll(strokes[bestIdx])
+                    chain.addAll(strokes[bestIdx].points)
                     searching = true
                 } else if (bestIdx < -1) {
                     val realIdx = -bestIdx - 1
                     used[realIdx] = true
-                    chain.addAll(strokes[realIdx].reversed())
+                    chain.addAll(strokes[realIdx].points.reversed())
                     searching = true
                 }
             }
 
-            if (chain.size >= 2) result.add(chain)
+            if (chain.size >= 2) result.add(DrawingStroke(chain, mergeable = true))
         }
 
         return result
@@ -175,31 +205,81 @@ class DrawingAccessibilityService : AccessibilityService() {
         return Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
     }
 
-    private fun buildDrawSegments(strokes: List<List<FloatArray>>): List<DrawSegment> {
+    private fun buildDrawSegments(strokes: List<DrawingStroke>): List<DrawSegment> {
         val segments = mutableListOf<DrawSegment>()
 
         strokes.forEachIndexed { strokeIndex, stroke ->
-            if (stroke.size < 2) return@forEachIndexed
+            val points = stroke.points
+            if (points.size < 2) return@forEachIndexed
 
             val ranges = mutableListOf<Pair<Int, Int>>()
             var start = 0
-            while (start < stroke.size - 1) {
-                val end = (start + MAX_SEGMENT_POINTS).coerceAtMost(stroke.size)
+            while (start < points.size - 1) {
+                val end = (start + MAX_SEGMENT_POINTS).coerceAtMost(points.size)
                 ranges.add(start to end)
-                if (end >= stroke.size) break
+                if (end >= points.size) break
                 start = (end - SEGMENT_OVERLAP_POINTS).coerceAtLeast(start + 1)
             }
 
             val segmentCount = ranges.size
             ranges.forEachIndexed { segmentIndex, (from, to) ->
-                val points = stroke.subList(from, to)
-                if (points.size >= 2) {
-                    segments.add(DrawSegment(points, strokeIndex, segmentIndex, segmentCount))
+                val segmentPoints = points.subList(from, to)
+                if (segmentPoints.size >= 2) {
+                    segments.add(DrawSegment(segmentPoints, strokeIndex, segmentIndex, segmentCount))
                 }
             }
         }
 
         return segments
+    }
+
+    private fun setChajiBrushToMinimum(after: () -> Unit) {
+        if (!isDrawing) return
+
+        val (screenWidth, screenHeight) = screenSize()
+        val x = screenWidth * CHAJI_SLIDER_MIN_X_RATIO
+        val y = screenHeight * CHAJI_SLIDER_Y_RATIO
+
+        val path = Path().apply {
+            moveTo(x, y)
+            lineTo(x + 0.1f, y)
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, BRUSH_TAP_DURATION_MS))
+            .build()
+
+        Log.d(TAG, "设置霸王茶姬最小画笔: tap=(${x.toInt()},${y.toInt()})")
+
+        dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gesture: GestureDescription?) {
+                handler.postDelayed({ after() }, BRUSH_SET_DELAY_MS)
+            }
+
+            override fun onCancelled(gesture: GestureDescription?) {
+                Log.w(TAG, "设置画笔粗细手势被取消，继续绘制")
+                handler.postDelayed({ after() }, BRUSH_SET_DELAY_MS)
+            }
+        }, null).also { accepted ->
+            if (!accepted) {
+                Log.w(TAG, "设置画笔粗细 dispatchGesture 返回 false，继续绘制")
+                handler.postDelayed({ after() }, BRUSH_SET_DELAY_MS)
+            }
+        }
+    }
+
+    private fun screenSize(): Pair<Int, Int> {
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            @Suppress("DEPRECATION")
+            val display = windowManager.defaultDisplay
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            display.getRealMetrics(metrics)
+            metrics.widthPixels to metrics.heightPixels
+        }
     }
 
     /**

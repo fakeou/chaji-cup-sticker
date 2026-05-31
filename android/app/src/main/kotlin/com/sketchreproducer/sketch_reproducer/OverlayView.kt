@@ -25,7 +25,7 @@ class OverlayView(context: Context) : View(context) {
     private val minFrameSize = 100f
 
     // ===== 笔画数据 =====
-    private var strokes: List<List<FloatArray>> = emptyList()
+    private var strokes: List<DrawingStroke> = emptyList()
     private var canvasWidth: Int = 1
     private var canvasHeight: Int = 1
 
@@ -90,7 +90,7 @@ class OverlayView(context: Context) : View(context) {
     private var lastX = 0f
     private var lastY = 0f
 
-    fun setStrokes(strokeList: List<List<FloatArray>>, cw: Int, ch: Int) {
+    fun setStrokes(strokeList: List<DrawingStroke>, cw: Int, ch: Int) {
         strokes = strokeList
         canvasWidth = cw
         canvasHeight = ch
@@ -147,10 +147,12 @@ class OverlayView(context: Context) : View(context) {
             canvas.translate(ox, oy)
             canvas.scale(s, s)
             for (stroke in strokes) {
-                if (stroke.size < 2) continue
+                if (stroke.points.size < 2) continue
                 val path = Path().apply {
-                    moveTo(stroke[0][0], stroke[0][1])
-                    for (i in 1 until stroke.size) lineTo(stroke[i][0], stroke[i][1])
+                    moveTo(stroke.points[0][0], stroke.points[0][1])
+                    for (i in 1 until stroke.points.size) {
+                        lineTo(stroke.points[i][0], stroke.points[i][1])
+                    }
                 }
                 canvas.drawPath(path, strokePaint)
             }

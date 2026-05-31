@@ -1,18 +1,21 @@
 /// 一条笔画，由一系列坐标点组成
 class Stroke {
   final List<StrokePoint> points;
+  final bool mergeable;
 
-  Stroke(this.points);
+  Stroke(this.points, {this.mergeable = true});
 
   Map<String, dynamic> toJson() => {
-        'points': points.map((p) => p.toJson()).toList(),
-      };
+    'points': points.map((p) => p.toJson()).toList(),
+    'mergeable': mergeable,
+  };
 
   factory Stroke.fromJson(Map<String, dynamic> json) => Stroke(
-        (json['points'] as List)
-            .map((p) => StrokePoint.fromJson(p as Map<String, dynamic>))
-            .toList(),
-      );
+    (json['points'] as List)
+        .map((p) => StrokePoint.fromJson(p as Map<String, dynamic>))
+        .toList(),
+    mergeable: json['mergeable'] as bool? ?? true,
+  );
 }
 
 class StrokePoint {
@@ -40,16 +43,16 @@ class SketchData {
   });
 
   Map<String, dynamic> toJson() => {
-        'strokes': strokes.map((s) => s.toJson()).toList(),
-        'canvasWidth': canvasWidth,
-        'canvasHeight': canvasHeight,
-      };
+    'strokes': strokes.map((s) => s.toJson()).toList(),
+    'canvasWidth': canvasWidth,
+    'canvasHeight': canvasHeight,
+  };
 
   factory SketchData.fromJson(Map<String, dynamic> json) => SketchData(
-        strokes: (json['strokes'] as List)
-            .map((s) => Stroke.fromJson(s as Map<String, dynamic>))
-            .toList(),
-        canvasWidth: json['canvasWidth'] as int,
-        canvasHeight: json['canvasHeight'] as int,
-      );
+    strokes: (json['strokes'] as List)
+        .map((s) => Stroke.fromJson(s as Map<String, dynamic>))
+        .toList(),
+    canvasWidth: json['canvasWidth'] as int,
+    canvasHeight: json['canvasHeight'] as int,
+  );
 }

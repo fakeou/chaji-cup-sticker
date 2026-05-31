@@ -36,7 +36,7 @@ class FloatingWindowService : Service() {
             private set
 
         // 待处理的笔画数据
-        var pendingStrokes: List<List<FloatArray>>? = null
+        var pendingStrokes: List<DrawingStroke>? = null
         var pendingCanvasWidth: Int = 0
         var pendingCanvasHeight: Int = 0
     }
@@ -183,7 +183,7 @@ class FloatingWindowService : Service() {
 
     // ===== 覆盖层 =====
 
-    private fun showOverlay(strokes: List<List<FloatArray>>, cw: Int, ch: Int) {
+    private fun showOverlay(strokes: List<DrawingStroke>, cw: Int, ch: Int) {
         // 隐藏悬浮按钮
         floatingButton?.visibility = View.INVISIBLE
 

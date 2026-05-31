@@ -16,8 +16,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   SketchData? _sketch;
-  Uint8List? _imageBytes;
-  double _brushWidth = 2.0;
   bool _isProcessing = false;
   String _statusText = '请上传一张简笔画图片';
   bool _accessibilityEnabled = false;
@@ -51,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final bytes = await picked.readAsBytes();
-      _imageBytes = bytes;
       await _processImage(bytes);
     } catch (e) {
       setState(() {
@@ -63,10 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _processImage(Uint8List bytes) async {
     try {
-      final sketch = await ImageProcessor.processImage(
-        bytes,
-        brushWidth: _brushWidth,
-      );
+      final sketch = await ImageProcessor.processImage(bytes, brushWidth: 1.0);
 
       if (!mounted) return;
       setState(() {
@@ -81,17 +75,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _statusText = '识别失败: $e';
       });
     }
-  }
-
-  Future<void> _reprocessImage() async {
-    final bytes = _imageBytes;
-    if (bytes == null || _isProcessing) return;
-
-    setState(() {
-      _isProcessing = true;
-      _statusText = '正在按 ${_brushWidth.toStringAsFixed(1)} 画笔重新识别...';
-    });
-    await _processImage(bytes);
   }
 
   Future<void> _activateFloating() async {
@@ -205,9 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            _buildBrushWidthCard(),
-            const SizedBox(height: 16),
-
             // 状态
             Text(
               _statusText,
@@ -235,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: Size.infinite,
                     painter: StrokePreviewPainter(
                       sketch: _sketch!,
-                      strokeWidth: _brushWidth,
+                      strokeWidth: 1.0,
                     ),
                   ),
                 ),
@@ -316,48 +296,6 @@ class _HomeScreenState extends State<HomeScreen> {
               '悬浮窗权限',
               _overlayPermission,
               () async => await DrawingService.requestOverlayPermission(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrushWidthCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.brush, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  '画笔粗细 ${_brushWidth.toStringAsFixed(1)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            Slider(
-              min: 1.0,
-              max: 6.0,
-              divisions: 10,
-              value: _brushWidth,
-              label: _brushWidth.toStringAsFixed(1),
-              onChanged: _isProcessing
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _brushWidth = value;
-                      });
-                    },
-              onChangeEnd: (_) => _reprocessImage(),
-            ),
-            Text(
-              _sketch == null ? '上传前可先选择粗细' : '松开滑块后会按新粗细重新识别',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
