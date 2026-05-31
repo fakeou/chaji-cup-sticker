@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _accessibilityEnabled = false;
   bool _overlayPermission = false;
   bool _floatingActive = false;
+  double _brushWidth = 1.5;
 
   @override
   void initState() {
@@ -104,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // 发送数据到原生层
-    await DrawingService.sendSketchData(_sketch!);
+    await DrawingService.sendSketchData(_sketch!, brushWidth: _brushWidth);
     // 显示悬浮按钮
     await DrawingService.showFloatingButton();
 
@@ -215,11 +216,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: Size.infinite,
                     painter: StrokePreviewPainter(
                       sketch: _sketch!,
-                      strokeWidth: 1.0,
+                      strokeWidth: _brushWidth,
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              _buildBrushWidthControl(),
               const SizedBox(height: 8),
               Text(
                 '画布: ${_sketch!.canvasWidth} × ${_sketch!.canvasHeight}  |  笔画: ${_sketch!.strokes.length}',
@@ -296,6 +299,43 @@ class _HomeScreenState extends State<HomeScreen> {
               '悬浮窗权限',
               _overlayPermission,
               () async => await DrawingService.requestOverlayPermission(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrushWidthControl() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.brush, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  '画笔粗细',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(_brushWidth.toStringAsFixed(1)),
+              ],
+            ),
+            Slider(
+              value: _brushWidth,
+              min: 1.0,
+              max: 2.0,
+              divisions: 10,
+              label: _brushWidth.toStringAsFixed(1),
+              onChanged: (value) {
+                setState(() {
+                  _brushWidth = double.parse(value.toStringAsFixed(1));
+                });
+              },
             ),
           ],
         ),

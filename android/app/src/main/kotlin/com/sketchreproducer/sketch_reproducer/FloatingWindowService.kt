@@ -39,6 +39,7 @@ class FloatingWindowService : Service() {
         var pendingStrokes: List<DrawingStroke>? = null
         var pendingCanvasWidth: Int = 0
         var pendingCanvasHeight: Int = 0
+        var pendingBrushWidth: Float = 1.5f
     }
 
     private lateinit var windowManager: WindowManager
@@ -240,7 +241,8 @@ class FloatingWindowService : Service() {
             strokes,
             floatArrayOf(frame.left, frame.top, frame.right, frame.bottom),
             pendingCanvasWidth,
-            pendingCanvasHeight
+            pendingCanvasHeight,
+            pendingBrushWidth
         )
 
         val success = DrawingAccessibilityService.startDrawing()

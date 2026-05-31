@@ -25,6 +25,7 @@ class MainActivity : FlutterActivity() {
     private var sketchStrokes: List<DrawingStroke>? = null
     private var sketchCanvasWidth: Int = 0
     private var sketchCanvasHeight: Int = 0
+    private var sketchBrushWidth: Float = 1.5f
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -109,6 +110,7 @@ class MainActivity : FlutterActivity() {
         FloatingWindowService.pendingStrokes = sketchStrokes
         FloatingWindowService.pendingCanvasWidth = sketchCanvasWidth
         FloatingWindowService.pendingCanvasHeight = sketchCanvasHeight
+        FloatingWindowService.pendingBrushWidth = sketchBrushWidth
 
         val intent = Intent(this, FloatingWindowService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -136,6 +138,8 @@ class MainActivity : FlutterActivity() {
             val strokesRaw = data["strokes"] as? List<*> ?: return
             val cw = data["canvasWidth"] as? Int ?: return
             val ch = data["canvasHeight"] as? Int ?: return
+            val brushWidth = ((data["brushWidth"] as? Number)?.toFloat() ?: 1.5f)
+                .coerceIn(1.0f, 2.0f)
 
             val strokes = mutableListOf<DrawingStroke>()
             for (strokeRaw in strokesRaw) {
@@ -155,7 +159,8 @@ class MainActivity : FlutterActivity() {
             sketchStrokes = strokes
             sketchCanvasWidth = cw
             sketchCanvasHeight = ch
-            Log.d(TAG, "收到笔画数据: ${strokes.size} 条笔画, 画布 ${cw}x${ch}")
+            sketchBrushWidth = brushWidth
+            Log.d(TAG, "收到笔画数据: ${strokes.size} 条笔画, 画布 ${cw}x${ch}, 画笔 $brushWidth")
         } catch (e: Exception) {
             Log.e(TAG, "解析笔画数据失败: ${e.message}")
         }

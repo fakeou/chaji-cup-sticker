@@ -30,6 +30,7 @@ class DrawingAccessibilityService : AccessibilityService() {
         private const val SEGMENT_OVERLAP_POINTS = 1
         private const val MAX_RETRY_COUNT = 2
         private const val CHAJI_SLIDER_MIN_X_RATIO = 191f / 1440f
+        private const val CHAJI_SLIDER_2X_X_RATIO = 313f / 1440f
         private const val CHAJI_SLIDER_Y_RATIO = 2828f / 3200f
         private const val BRUSH_TAP_DURATION_MS = 80L
         private const val BRUSH_SET_DELAY_MS = 350L
@@ -41,6 +42,7 @@ class DrawingAccessibilityService : AccessibilityService() {
         private var pendingFrame: FloatArray? = null
         private var canvasWidth: Int = 0
         private var canvasHeight: Int = 0
+        private var brushWidth: Float = 1.5f
         private var isDrawing = false
 
         fun setDrawData(
@@ -48,11 +50,13 @@ class DrawingAccessibilityService : AccessibilityService() {
             frame: FloatArray,
             cw: Int,
             ch: Int,
+            brush: Float = 1.5f,
         ) {
             pendingStrokes = strokes
             pendingFrame = frame
             canvasWidth = cw
             canvasHeight = ch
+            brushWidth = brush.coerceIn(1.0f, 2.0f)
         }
 
         fun startDrawing(): Boolean {
@@ -117,7 +121,7 @@ class DrawingAccessibilityService : AccessibilityService() {
         Log.d(TAG, "=== 开始绘制 ===")
         Log.d(TAG, "区域: ($fl,$ft)-($fr,$fb), 画布: ${cw}x${ch}")
         Log.d(TAG, "实际绘制区域: ($drawLeft,$drawTop)-($drawRight,$drawBottom), scale=$scale")
-        Log.d(TAG, "原始笔画: ${strokes.size}, 使用最小画笔")
+        Log.d(TAG, "原始笔画: ${strokes.size}, 画笔 ${brushWidth}")
 
         // 1. 映射到屏幕坐标。这里必须和 OverlayView 的预览保持一致：等比缩放 + 居中。
         val screenStrokes = mutableListOf<DrawingStroke>()
@@ -146,7 +150,7 @@ class DrawingAccessibilityService : AccessibilityService() {
 
         // 3. 逐条绘制
         handler.postDelayed(
-            { setChajiBrushToMinimum { drawNext(segments, 0) } },
+            { setChajiBrushWidth(brushWidth) { drawNext(segments, 0) } },
             PRE_DRAW_DELAY_MS
         )
     }
@@ -250,11 +254,14 @@ class DrawingAccessibilityService : AccessibilityService() {
         return segments
     }
 
-    private fun setChajiBrushToMinimum(after: () -> Unit) {
+    private fun setChajiBrushWidth(brush: Float, after: () -> Unit) {
         if (!isDrawing) return
 
         val (screenWidth, screenHeight) = screenSize()
-        val x = screenWidth * CHAJI_SLIDER_MIN_X_RATIO
+        val normalized = ((brush.coerceIn(1.0f, 2.0f) - 1.0f) / 1.0f)
+        val sliderRatio = CHAJI_SLIDER_MIN_X_RATIO +
+            (CHAJI_SLIDER_2X_X_RATIO - CHAJI_SLIDER_MIN_X_RATIO) * normalized
+        val x = screenWidth * sliderRatio
         val y = screenHeight * CHAJI_SLIDER_Y_RATIO
 
         val path = Path().apply {
@@ -265,7 +272,7 @@ class DrawingAccessibilityService : AccessibilityService() {
             .addStroke(GestureDescription.StrokeDescription(path, 0, BRUSH_TAP_DURATION_MS))
             .build()
 
-        Log.d(TAG, "设置霸王茶姬最小画笔: tap=(${x.toInt()},${y.toInt()})")
+        Log.d(TAG, "设置霸王茶姬画笔: width=$brush, tap=(${x.toInt()},${y.toInt()}), ratio=$sliderRatio")
 
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {

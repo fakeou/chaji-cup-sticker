@@ -46,8 +46,14 @@ class DrawingService {
   }
 
   /// 发送绘制数据到原生层
-  static Future<void> sendSketchData(SketchData data) async {
-    await _channel.invokeMethod('sendSketchData', data.toJson());
+  static Future<void> sendSketchData(
+    SketchData data, {
+    double brushWidth = 1.5,
+  }) async {
+    await _channel.invokeMethod('sendSketchData', {
+      ...data.toJson(),
+      'brushWidth': brushWidth,
+    });
   }
 
   /// 在指定区域开始绘制
