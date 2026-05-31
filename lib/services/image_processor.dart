@@ -9,6 +9,7 @@ class ImageProcessor {
     Uint8List imageBytes, {
     int targetSize = 800,
     int threshold = 128,
+    double brushWidth = 2.0,
   }) async {
     final codec = await ui.instantiateImageCodec(imageBytes);
     final frame = await codec.getNextFrame();
@@ -24,18 +25,27 @@ class ImageProcessor {
     if (byteData == null) throw Exception('无法读取图片数据');
 
     final binary = _toBinary(byteData, w, h, newW, newH, threshold);
-    final skeleton = _skeletonize(binary, newW, newH);
-    final strokes = _tracePaths(skeleton, newW, newH);
-
-    return SketchData(
-      strokes: strokes,
-      canvasWidth: newW,
-      canvasHeight: newH,
+    final filledMask = _detectFilledRegions(binary, newW, newH, brushWidth);
+    final lineBinary = List<int>.generate(
+      binary.length,
+      (i) => filledMask[i] == 1 ? 0 : binary[i],
     );
+    final skeleton = _skeletonize(lineBinary, newW, newH);
+    final strokes = [
+      ..._tracePaths(skeleton, newW, newH, epsilon: 0.9),
+      ..._traceFilledRegions(filledMask, newW, newH, brushWidth),
+    ];
+
+    return SketchData(strokes: strokes, canvasWidth: newW, canvasHeight: newH);
   }
 
   static List<int> _toBinary(
-    ByteData rgba, int srcW, int srcH, int dstW, int dstH, int threshold,
+    ByteData rgba,
+    int srcW,
+    int srcH,
+    int dstW,
+    int dstH,
+    int threshold,
   ) {
     final binary = List<int>.filled(dstW * dstH, 0);
     for (int y = 0; y < dstH; y++) {
@@ -53,6 +63,72 @@ class ImageProcessor {
     return binary;
   }
 
+  static List<int> _detectFilledRegions(
+    List<int> binary,
+    int w,
+    int h,
+    double brushWidth,
+  ) {
+    final visited = List<bool>.filled(binary.length, false);
+    final filled = List<int>.filled(binary.length, 0);
+    final minDimension = max(10, (brushWidth * 4).round());
+    final minArea = max(50, minDimension * minDimension ~/ 2);
+
+    for (int start = 0; start < binary.length; start++) {
+      if (binary[start] == 0 || visited[start]) continue;
+
+      final component = <int>[];
+      final queue = <int>[start];
+      visited[start] = true;
+      var left = start % w;
+      var right = left;
+      var top = start ~/ w;
+      var bottom = top;
+
+      for (int cursor = 0; cursor < queue.length; cursor++) {
+        final idx = queue[cursor];
+        component.add(idx);
+        final x = idx % w;
+        final y = idx ~/ w;
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            final nx = x + dx;
+            final ny = y + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            final nidx = ny * w + nx;
+            if (binary[nidx] == 1 && !visited[nidx]) {
+              visited[nidx] = true;
+              queue.add(nidx);
+            }
+          }
+        }
+      }
+
+      final width = right - left + 1;
+      final height = bottom - top + 1;
+      final bboxArea = width * height;
+      final density = bboxArea == 0 ? 0.0 : component.length / bboxArea;
+      final looksFilled =
+          component.length >= minArea &&
+          min(width, height) >= minDimension &&
+          density >= 0.38;
+
+      if (looksFilled) {
+        for (final idx in component) {
+          filled[idx] = 1;
+        }
+      }
+    }
+
+    return filled;
+  }
+
   static List<int> _skeletonize(List<int> binary, int w, int h) {
     var img = List<int>.from(binary);
     bool changed = true;
@@ -64,10 +140,14 @@ class ImageProcessor {
           final idx = y * w + x;
           if (img[idx] == 0) continue;
           final p = [
-            img[(y - 1) * w + x], img[(y - 1) * w + x + 1],
-            img[y * w + x + 1], img[(y + 1) * w + x + 1],
-            img[(y + 1) * w + x], img[(y + 1) * w + x - 1],
-            img[y * w + x - 1], img[(y - 1) * w + x - 1],
+            img[(y - 1) * w + x],
+            img[(y - 1) * w + x + 1],
+            img[y * w + x + 1],
+            img[(y + 1) * w + x + 1],
+            img[(y + 1) * w + x],
+            img[(y + 1) * w + x - 1],
+            img[y * w + x - 1],
+            img[(y - 1) * w + x - 1],
           ];
           final neighbors = p.where((n) => n == 1).length;
           if (neighbors < 2 || neighbors > 6) continue;
@@ -77,7 +157,9 @@ class ImageProcessor {
           toRemove.add(idx);
         }
       }
-      for (final idx in toRemove) { img[idx] = 0; }
+      for (final idx in toRemove) {
+        img[idx] = 0;
+      }
       if (toRemove.isNotEmpty) changed = true;
 
       toRemove.clear();
@@ -86,10 +168,14 @@ class ImageProcessor {
           final idx = y * w + x;
           if (img[idx] == 0) continue;
           final p = [
-            img[(y - 1) * w + x], img[(y - 1) * w + x + 1],
-            img[y * w + x + 1], img[(y + 1) * w + x + 1],
-            img[(y + 1) * w + x], img[(y + 1) * w + x - 1],
-            img[y * w + x - 1], img[(y - 1) * w + x - 1],
+            img[(y - 1) * w + x],
+            img[(y - 1) * w + x + 1],
+            img[y * w + x + 1],
+            img[(y + 1) * w + x + 1],
+            img[(y + 1) * w + x],
+            img[(y + 1) * w + x - 1],
+            img[y * w + x - 1],
+            img[(y - 1) * w + x - 1],
           ];
           final neighbors = p.where((n) => n == 1).length;
           if (neighbors < 2 || neighbors > 6) continue;
@@ -99,7 +185,9 @@ class ImageProcessor {
           toRemove.add(idx);
         }
       }
-      for (final idx in toRemove) { img[idx] = 0; }
+      for (final idx in toRemove) {
+        img[idx] = 0;
+      }
       if (toRemove.isNotEmpty) changed = true;
     }
     return img;
@@ -113,7 +201,12 @@ class ImageProcessor {
     return count;
   }
 
-  static List<Stroke> _tracePaths(List<int> skeleton, int w, int h) {
+  static List<Stroke> _tracePaths(
+    List<int> skeleton,
+    int w,
+    int h, {
+    double epsilon = 1.0,
+  }) {
     final visited = <int>{};
     final strokes = <Stroke>[];
     for (int y = 0; y < h; y++) {
@@ -135,39 +228,92 @@ class ImageProcessor {
               if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
               final nidx = ny * w + nx;
               if (skeleton[nidx] == 1 && !visited.contains(nidx)) {
-                cx = nx; cy = ny; found = true; break;
+                cx = nx;
+                cy = ny;
+                found = true;
+                break;
               }
             }
             if (found) break;
           }
           if (!found) break;
         }
-        if (points.length >= 3) {
-          strokes.add(Stroke(_douglasPeucker(points, epsilon: 1.5)));
+        if (points.length >= 2) {
+          strokes.add(Stroke(_douglasPeucker(points, epsilon: epsilon)));
         }
       }
     }
     return strokes;
   }
 
-  static List<StrokePoint> _douglasPeucker(List<StrokePoint> points, {double epsilon = 1.0}) {
+  static List<Stroke> _traceFilledRegions(
+    List<int> filledMask,
+    int w,
+    int h,
+    double brushWidth,
+  ) {
+    final strokes = <Stroke>[];
+    final spacing = max(2, brushWidth.round());
+
+    for (int y = 0; y < h; y += spacing) {
+      var x = 0;
+      while (x < w) {
+        while (x < w && filledMask[y * w + x] == 0) {
+          x++;
+        }
+        if (x >= w) break;
+
+        final start = x;
+        while (x < w && filledMask[y * w + x] == 1) {
+          x++;
+        }
+        final end = x - 1;
+
+        if (end - start >= 1) {
+          strokes.add(
+            Stroke([
+              StrokePoint(start.toDouble(), y.toDouble()),
+              StrokePoint(end.toDouble(), y.toDouble()),
+            ]),
+          );
+        }
+      }
+    }
+
+    return strokes;
+  }
+
+  static List<StrokePoint> _douglasPeucker(
+    List<StrokePoint> points, {
+    double epsilon = 1.0,
+  }) {
     if (points.length <= 2) return points;
     double maxDist = 0;
     int maxIdx = 0;
     final first = points.first, last = points.last;
     for (int i = 1; i < points.length - 1; i++) {
       final dist = _pointToLineDistance(points[i], first, last);
-      if (dist > maxDist) { maxDist = dist; maxIdx = i; }
+      if (dist > maxDist) {
+        maxDist = dist;
+        maxIdx = i;
+      }
     }
     if (maxDist > epsilon) {
-      final left = _douglasPeucker(points.sublist(0, maxIdx + 1), epsilon: epsilon);
+      final left = _douglasPeucker(
+        points.sublist(0, maxIdx + 1),
+        epsilon: epsilon,
+      );
       final right = _douglasPeucker(points.sublist(maxIdx), epsilon: epsilon);
       return [...left.sublist(0, left.length - 1), ...right];
     }
     return [first, last];
   }
 
-  static double _pointToLineDistance(StrokePoint p, StrokePoint a, StrokePoint b) {
+  static double _pointToLineDistance(
+    StrokePoint p,
+    StrokePoint a,
+    StrokePoint b,
+  ) {
     final dx = b.x - a.x, dy = b.y - a.y;
     final lenSq = dx * dx + dy * dy;
     if (lenSq == 0) return sqrt(pow(p.x - a.x, 2) + pow(p.y - a.y, 2));

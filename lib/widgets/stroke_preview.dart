@@ -54,5 +54,7 @@ class StrokePreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant StrokePreviewPainter oldDelegate) =>
-      oldDelegate.sketch != sketch;
+      oldDelegate.sketch != sketch ||
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

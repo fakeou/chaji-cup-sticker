@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/stroke.dart';
@@ -14,6 +16,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   SketchData? _sketch;
+  Uint8List? _imageBytes;
+  double _brushWidth = 2.0;
   bool _isProcessing = false;
   String _statusText = '请上传一张简笔画图片';
   bool _accessibilityEnabled = false;
@@ -47,19 +51,47 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final bytes = await picked.readAsBytes();
-      final sketch = await ImageProcessor.processImage(bytes);
-
-      setState(() {
-        _sketch = sketch;
-        _isProcessing = false;
-        _statusText = '识别完成！共 ${sketch.strokes.length} 条笔画';
-      });
+      _imageBytes = bytes;
+      await _processImage(bytes);
     } catch (e) {
       setState(() {
         _isProcessing = false;
         _statusText = '识别失败: $e';
       });
     }
+  }
+
+  Future<void> _processImage(Uint8List bytes) async {
+    try {
+      final sketch = await ImageProcessor.processImage(
+        bytes,
+        brushWidth: _brushWidth,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _sketch = sketch;
+        _isProcessing = false;
+        _statusText = '识别完成！共 ${sketch.strokes.length} 条笔画';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+        _statusText = '识别失败: $e';
+      });
+    }
+  }
+
+  Future<void> _reprocessImage() async {
+    final bytes = _imageBytes;
+    if (bytes == null || _isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+      _statusText = '正在按 ${_brushWidth.toStringAsFixed(1)} 画笔重新识别...';
+    });
+    await _processImage(bytes);
   }
 
   Future<void> _activateFloating() async {
@@ -82,9 +114,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_sketch == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先上传并识别图片')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先上传并识别图片')));
       return;
     }
 
@@ -112,16 +144,26 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _showPermissionDialog(String title, String content, VoidCallback onConfirm) {
+  void _showPermissionDialog(
+    String title,
+    String content,
+    VoidCallback onConfirm,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           TextButton(
-            onPressed: () { Navigator.pop(ctx); onConfirm(); },
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm();
+            },
             child: const Text('去设置'),
           ),
         ],
@@ -157,18 +199,29 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: _isProcessing ? null : _pickImage,
               icon: const Icon(Icons.upload_file),
               label: Text(_isProcessing ? '处理中...' : '上传简笔画图片'),
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
             const SizedBox(height: 16),
 
+            _buildBrushWidthCard(),
+            const SizedBox(height: 16),
+
             // 状态
-            Text(_statusText, textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.grey)),
+            Text(
+              _statusText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
             const SizedBox(height: 16),
 
             // 预览
             if (_sketch != null) ...[
-              const Text('识别预览', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text(
+                '识别预览',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               Container(
                 height: 300,
@@ -180,7 +233,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(8),
                   child: CustomPaint(
                     size: Size.infinite,
-                    painter: StrokePreviewPainter(sketch: _sketch!),
+                    painter: StrokePreviewPainter(
+                      sketch: _sketch!,
+                      strokeWidth: _brushWidth,
+                    ),
                   ),
                 ),
               ),
@@ -251,10 +307,58 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const Text('权限状态', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            _permRow('无障碍服务', _accessibilityEnabled,
-                () async => await DrawingService.openAccessibilitySettings()),
-            _permRow('悬浮窗权限', _overlayPermission,
-                () async => await DrawingService.requestOverlayPermission()),
+            _permRow(
+              '无障碍服务',
+              _accessibilityEnabled,
+              () async => await DrawingService.openAccessibilitySettings(),
+            ),
+            _permRow(
+              '悬浮窗权限',
+              _overlayPermission,
+              () async => await DrawingService.requestOverlayPermission(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrushWidthCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.brush, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '画笔粗细 ${_brushWidth.toStringAsFixed(1)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            Slider(
+              min: 1.0,
+              max: 6.0,
+              divisions: 10,
+              value: _brushWidth,
+              label: _brushWidth.toStringAsFixed(1),
+              onChanged: _isProcessing
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _brushWidth = value;
+                      });
+                    },
+              onChangeEnd: (_) => _reprocessImage(),
+            ),
+            Text(
+              _sketch == null ? '上传前可先选择粗细' : '松开滑块后会按新粗细重新识别',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
       ),
@@ -266,8 +370,11 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(enabled ? Icons.check_circle : Icons.cancel,
-              color: enabled ? Colors.green : Colors.red, size: 20),
+          Icon(
+            enabled ? Icons.check_circle : Icons.cancel,
+            color: enabled ? Colors.green : Colors.red,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Text(name),
           const Spacer(),
