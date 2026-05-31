@@ -16,15 +16,16 @@ class DrawingAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "DrawingA11y"
 
-        private const val PRE_DRAW_DELAY_MS = 700L
-        private const val POINT_DURATION_MS = 60L
-        private const val PX_DURATION_MS = 6L
-        private const val MIN_SEGMENT_DURATION_MS = 600L
-        private const val MAX_SEGMENT_DURATION_MS = 12000L
-        private const val INTERNAL_SEGMENT_GAP_MS = 80L
-        private const val STROKE_GAP_MS = 450L
-        private const val BATCH_STROKE_SIZE = 5
-        private const val BATCH_PAUSE_MS = 1200L
+        private const val PRE_DRAW_DELAY_MS = 500L
+        private const val POINT_DURATION_MS = 45L
+        private const val PX_DURATION_MS = 4L
+        private const val MIN_SEGMENT_DURATION_MS = 360L
+        private const val MAX_SEGMENT_DURATION_MS = 9000L
+        private const val INTERNAL_SEGMENT_GAP_MS = 40L
+        private const val STROKE_GAP_MS = 220L
+        private const val RETRY_PAUSE_MS = 650L
+        private const val MERGE_MAX_GAP_PX = 8f
+        private const val DRAW_EDGE_INSET_PX = 1f
         private const val MAX_SEGMENT_POINTS = 70
         private const val SEGMENT_OVERLAP_POINTS = 1
         private const val MAX_RETRY_COUNT = 2
@@ -99,19 +100,35 @@ class DrawingAccessibilityService : AccessibilityService() {
     ) {
         val fl = frame[0]; val ft = frame[1]; val fr = frame[2]; val fb = frame[3]
         val fw = fr - fl; val fh = fb - ft
+        if (fw <= 0f || fh <= 0f || cw <= 0 || ch <= 0) {
+            isDrawing = false
+            Log.w(TAG, "绘制区域或画布尺寸无效: frame=($fl,$ft)-($fr,$fb), canvas=${cw}x${ch}")
+            return
+        }
+
+        val scale = minOf(fw / cw, fh / ch)
+        val offsetX = (fw - cw * scale) / 2f
+        val offsetY = (fh - ch * scale) / 2f
+        val drawLeft = fl + offsetX + DRAW_EDGE_INSET_PX
+        val drawTop = ft + offsetY + DRAW_EDGE_INSET_PX
+        val drawRight = fl + offsetX + cw * scale - DRAW_EDGE_INSET_PX
+        val drawBottom = ft + offsetY + ch * scale - DRAW_EDGE_INSET_PX
 
         Log.d(TAG, "=== 开始绘制 ===")
         Log.d(TAG, "区域: ($fl,$ft)-($fr,$fb), 画布: ${cw}x${ch}")
+        Log.d(TAG, "实际绘制区域: ($drawLeft,$drawTop)-($drawRight,$drawBottom), scale=$scale")
         Log.d(TAG, "原始笔画: ${strokes.size}, 使用最小画笔")
 
-        // 1. 映射到屏幕坐标
+        // 1. 映射到屏幕坐标。这里必须和 OverlayView 的预览保持一致：等比缩放 + 居中。
         val screenStrokes = mutableListOf<DrawingStroke>()
         for (stroke in strokes) {
             if (stroke.points.size < 2) continue
             screenStrokes.add(
                 DrawingStroke(
                     stroke.points.map { p ->
-                        floatArrayOf(fl + (p[0] / cw) * fw, ft + (p[1] / ch) * fh)
+                        val x = (fl + offsetX + p[0] * scale).coerceIn(drawLeft, drawRight)
+                        val y = (ft + offsetY + p[1] * scale).coerceIn(drawTop, drawBottom)
+                        floatArrayOf(x, y)
                     },
                     stroke.mergeable
                 )
@@ -119,13 +136,13 @@ class DrawingAccessibilityService : AccessibilityService() {
         }
 
         // 2. 合并端点接近的笔画（减少抬手次数）
-        val merged = mergeNearbyStrokes(screenStrokes, maxGap = 30f)
+        val merged = mergeNearbyStrokes(screenStrokes, maxGap = MERGE_MAX_GAP_PX)
         Log.d(TAG, "合并后笔画: ${merged.size}")
 
         val segments = buildDrawSegments(merged)
         Log.d(TAG, "拆分后手势段: ${segments.size}, " +
             "每点 ${POINT_DURATION_MS}ms, 笔画间隔 ${STROKE_GAP_MS}ms, " +
-            "每 ${BATCH_STROKE_SIZE} 条笔画暂停 ${BATCH_PAUSE_MS}ms")
+            "合并半径 ${MERGE_MAX_GAP_PX}px")
 
         // 3. 逐条绘制
         handler.postDelayed(
@@ -347,7 +364,7 @@ class DrawingAccessibilityService : AccessibilityService() {
                     if (isDrawing && retryCount < MAX_RETRY_COUNT) {
                         handler.postDelayed(
                             { drawNext(segments, index, retryCount + 1) },
-                            BATCH_PAUSE_MS
+                            RETRY_PAUSE_MS
                         )
                     } else {
                         handler.postDelayed(
@@ -363,7 +380,7 @@ class DrawingAccessibilityService : AccessibilityService() {
                     if (retryCount < MAX_RETRY_COUNT) {
                         handler.postDelayed(
                             { drawNext(segments, index, retryCount + 1) },
-                            BATCH_PAUSE_MS
+                            RETRY_PAUSE_MS
                         )
                     } else {
                         handler.postDelayed(
@@ -388,7 +405,6 @@ class DrawingAccessibilityService : AccessibilityService() {
         val next = segments[nextIndex]
         return when {
             current.strokeIndex == next.strokeIndex -> INTERNAL_SEGMENT_GAP_MS
-            next.strokeIndex > 0 && next.strokeIndex % BATCH_STROKE_SIZE == 0 -> BATCH_PAUSE_MS
             else -> STROKE_GAP_MS
         }
     }
